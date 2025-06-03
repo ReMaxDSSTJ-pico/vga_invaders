@@ -1,0 +1,93 @@
+#include "PicoTimer.h"
+
+#define PIN_SOUND_OUTPUT 19
+
+// generate sound by toggling the pin state in the frequency of the tone
+
+
+/**
+ * @brief We use the TimerAlarm to generate tones.
+ *
+ * See class ArduinoPicoTone on PicoTone.h library 
+ * 
+ * Use 
+ *  static void tone(uint8_t pinNumber, unsigned int frequency, int duration)
+ * to generate a tone on the desired pin, desired frequency, desired miliseconds 
+ *
+ */
+
+#include "PicoTimer.h"
+
+
+/**
+ * @brief We use the TimerAlarm to generate tones.
+ */
+class PicoTone {
+    public:
+        PicoTone(){
+        }
+        ~PicoTone(){
+            noTone();
+        }
+        static PicoTone* getInstance() { return &picotoneInstance; }
+
+// generate sound by toggling the pin state in the frequency of the tone
+    static bool generate_sound_callback(repeating_timer_t *rt){
+        //static u32 tdelay;
+            PicoTone *pt = (PicoTone*)rt->user_data;
+//            pt->tdelay++;
+//            if ((pt->tdelay < pt->timeticks) && (pt->delay>0)) {
+//            if (pt->timeticks>0) {
+                pt->state = !pt->state; // toggle state
+                gpio_put(pt->pin, pt->state); 
+                pt->tdelay=0;
+//        }
+        return true;
+    }
+        
+// stop sound after the frequency of the tone
+        static int64_t stop_sound_callback(alarm_id_t id, void *user_data){
+            PicoTone *pt = (PicoTone*)user_data;
+            pt->noTone();
+            return 0; 
+        }
+
+
+        void tone(unsigned int frequency, uint64_t duration) {
+
+            delay = 500000 / (frequency);
+            //timeticks = duration*1000/delay;
+            // check for running alarms
+//            if (alarm_end.alarm_id_run!=-1) {
+//                alarm_end.stop();
+//                alarm.stop();
+//            }
+            
+            alarm.start(generate_sound_callback, delay, US, this);
+            
+            // Set alarm to stop sound
+            
+            //if (duration>0) 
+            //    alarm_end.start(stop_sound_callback, duration, MS, this, true);
+            
+        }
+        
+        void noTone() {
+            //alarm_end.stop();
+            alarm.stop();
+
+            //tdelay=0;
+            //delay=0;
+        }
+    protected:
+        TimerAlarmRepeating alarm;
+        //TimerAlarm alarm_end;
+        
+        int pin=PIN_SOUND_OUTPUT;
+        bool state;
+        u32 timeticks, tdelay=0;
+        uint64_t delay;
+    private:
+        static PicoTone picotoneInstance;
+};
+

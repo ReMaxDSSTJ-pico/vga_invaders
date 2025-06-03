@@ -1,0 +1,161 @@
+#include "PicoTimer.h"
+
+#define PIN_SOUND_OUTPUT 19
+
+// generate sound by toggling the pin state in the frequency of the tone
+
+
+/**
+ * @brief We use the TimerAlarm to generate tones.
+ *
+ * See class ArduinoPicoTone on PicoTone.h library 
+ * 
+ * Use 
+ *  static void tone(uint8_t pinNumber, unsigned int frequency, int duration)
+ * to generate a tone on the desired pin, desired frequency, desired miliseconds 
+ *
+ */
+
+#include "PicoTimer.h"
+
+
+enum SignalSource {Pulse, Noise, Sine, Sawtooth};
+/* May 2023, only Pulse is implemented */
+
+/**
+ * @brief We use the TimerAlarm to generate tones.
+ */
+class PicoTone {
+    public:
+        PicoTone(){
+        }
+        ~PicoTone(){
+            noTone();
+        }
+        static PicoTone* getInstance() { return &picotoneInstance; }
+
+// generate sound by toggling the pin state in the frequency of the tone
+    static bool generate_sound_callback(repeating_timer_t *rt){
+        PicoTone *pt = (PicoTone*)rt->user_data;
+        
+        if (!(pt->Sound_ticks % pt->delay)) {
+            pt->state = !pt->state; // toggle state, bit bang output
+            gpio_put(pt->pin, pt->state); 
+            //pt->Sound_ticks=0;
+        }
+        
+        pt->Sound_ticks++;
+/*
+        if (!(pt->Sound_ticks%1000)) {
+            // 1 mS mark
+
+            if (pt->Vibrato_delta) {
+                pt->delay = pt->delay+(pt->delay*pt->Vibrato_delta)/100; 
+                //pt->Sound_ticks=0;
+            
+                if (pt->delay > pt->Vibrato_maxdelay && pt->Vibrato_delta>0) {
+                    pt->Vibrato_delta= -1*(pt->Vibrato_delta);
+                }
+                
+                if (pt->delay < pt->Vibrato_mindelay && pt->Vibrato_delta<0) {
+                    pt->Vibrato_delta= -1*(pt->Vibrato_delta);
+                }
+            }
+            
+        }
+*/
+            
+    return true;
+}
+        
+// stop sound after the frequency of the tone
+        static int64_t stop_sound_callback(alarm_id_t id, void *user_data){
+            PicoTone *pt = (PicoTone*)user_data;
+            pt->noTone();
+            return 0; 
+        }
+
+
+        void tone(unsigned int frequency, uint64_t duration) {
+
+            delay = 500000 / frequency;
+            
+            // check for running alarms
+            if (alarm_end.alarm_id_run!=-1) {
+                alarm_end.stop();
+                alarm.stop();
+            }
+            
+            alarm.start(generate_sound_callback, 1, US, this);  // every 1 uS
+            
+            // Set alarm to stop sound
+            if (duration>0) 
+                alarm_end.start(stop_sound_callback, duration, MS, this, true);
+            
+        }
+
+/* Generic sound call for creating sound effects
+ * 
+ * frequency - initial frequency of generated signal in Hz
+ * duration  - how long with it play, in milliseconds
+ * SignalSource - your flavor of signal source Pulse, Sine, Sawtooth, Noise
+ * vibrato_pitch - percent 0 to 50, how much the pitch will change for vibrato
+ * vibrato_speed - in Hz, from 0 to 120, how fast the signal will swing from minimum frequency to maximum frequency
+ * 
+ */ 
+
+        void Sound(unsigned int frequency, uint64_t duration, SignalSource signal=Pulse, uint8_t vibrato_pitch=0, uint8_t vibrato_speed=0) {
+
+//            uint64_t delay = 1000000 / frequency / 2;
+            delay = 500000 / frequency;
+            
+            // check for running alarms
+            if (alarm_end.alarm_id_run!=-1) {
+                alarm_end.stop();
+                alarm.stop();
+            }
+            
+            if (vibrato_speed<120 && vibrato_speed) {        // Limit to 120 Hz vibrato
+                Vibrato_halfperiod = 500 / vibrato_speed;   // result in milli seconds
+                                                            // Multiply by 100, to calcel out the /100 division, just keep using integers
+                Vibrato_delta = vibrato_pitch*100 / Vibrato_halfperiod; 
+                Vibrato_maxdelay= delay*(1+vibrato_pitch/100);
+                Vibrato_mindelay= delay*(1-vibrato_pitch/100);                
+            }
+            
+            alarm.start(generate_sound_callback, 1, US, this);
+            
+            
+            // Set alarm to stop sound
+            if (duration>0) 
+                alarm_end.start(stop_sound_callback, duration, MS, this, true);
+            
+        }
+        
+
+        
+        void noTone() {
+            alarm.stop();
+            alarm_end.stop();
+            Vibrato_percent=0;
+            Vibrato_halfperiod=0;
+            Vibrato_delta=0;  
+            //Sound_ticks=0;
+        }
+    protected:
+        TimerAlarmRepeating alarm;
+        TimerAlarm alarm_end;
+        
+        int pin=PIN_SOUND_OUTPUT;
+        uint64_t delay;                 // Singal half period
+        u16 Vibrato_percent, Vibrato_halfperiod;
+        u16 Vibrato_maxdelay;
+        u16 Vibrato_mindelay;
+        u16 Vibrato_delta=100;          // We apply a division /100 later, just keep using integers
+        u16    Vibrato_ticks=0;
+        u16    Sound_ticks=0;
+        bool state;
+    private:
+        static PicoTone picotoneInstance;
+};
+
